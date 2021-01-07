@@ -2,40 +2,71 @@ package com.elyeproj.demosimpleprotobufkotlin
 
 import android.support.v7.app.AppCompatActivity
 import android.os.Bundle
-import io.reactivex.Observable
-import io.reactivex.android.schedulers.AndroidSchedulers
-import io.reactivex.schedulers.Schedulers
+import android.util.Log
 import kotlinx.android.synthetic.main.activity_main.*
-import okhttp3.OkHttpClient
-import okhttp3.Request
+import tutorial.Dataformat
 import tutorial.Dataformat.Person
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
+import java.nio.ByteBuffer
 
 class MainActivity : AppCompatActivity() {
-
-    private val okHttpClient = OkHttpClient()
-
-    private val observable = Observable.just("http://elyeproject.x10host.com/experiment/protobuf")
-            .map{
-                val request = Request.Builder().url(it).build()
-                val call = okHttpClient.newCall(request)
-                val response = call.execute()
-
-                if (response.isSuccessful) {
-                    val responseBody = response.body()
-                    if (responseBody != null) {
-                        return@map Person.parseFrom(responseBody.byteStream())
-                    }
-                }
-                return@map null
-
-            }.subscribeOn(Schedulers.io()).observeOn(AndroidSchedulers.mainThread())
+    companion object {
+        private var TAG = MainActivity.javaClass.simpleName
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        observable.subscribe{
-            showResult(it as Person)
+        txt_main.setOnClickListener {
+            protobuf()
+        }
+    }
+
+    private fun intToFourByteArray(value: Int): ByteArray {
+        return ByteBuffer.allocate(4).putInt(value).array()
+    }
+
+    private fun fourByteToInt(bytes: ByteArray): Int {
+        return ByteBuffer.wrap(bytes).int
+    }
+
+    private fun protobuf() {
+        val responseStream = ByteArrayOutputStream()
+        val header = Dataformat.Header.newBuilder().apply {
+            transactionId = 333
+            msg = "hello world"
+        }.build().writeTo(responseStream)
+        val headerSize = responseStream.size()
+
+        Log.d(TAG, "header: ${header.toString()}")
+        Log.d(TAG, "headerSize: ${headerSize}")
+
+        val body = Dataformat.Person.newBuilder().apply {
+            name = "ryan"
+            id = 2021
+            email = "ryan.see@kakaopaycorp.com"
+            phone = "+821012349876"
+        }.build().writeTo(responseStream)
+
+        val packet = ByteArrayOutputStream()
+        packet.write(intToFourByteArray(headerSize))
+        responseStream.writeTo(packet)
+
+        packet.use {
+            val input = ByteArrayInputStream(it.toByteArray())
+            val headerSizeBuffer = ByteArray(4)
+            input.read(headerSizeBuffer, 0, 4)
+
+            val headerSize = fourByteToInt(headerSizeBuffer)
+            val packetHeader = ByteArray(headerSize)
+
+            input.read(packetHeader, 0, headerSize)
+            val header = Dataformat.Header.parseFrom(packetHeader)
+            val body = Dataformat.Person.parseFrom(input)
+            Log.d(TAG, "header: ${header.toString()}")
+            Log.d(TAG, "body: ${body.toString()}")
         }
     }
 

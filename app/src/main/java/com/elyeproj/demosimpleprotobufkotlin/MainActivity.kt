@@ -56,13 +56,14 @@ class MainActivity : AppCompatActivity() {
 
         packet.use {
             val input = ByteArrayInputStream(it.toByteArray())
-            val headerSizeBuffer = ByteArray(4)
-            input.read(headerSizeBuffer, 0, 4)
 
-            val headerSize = fourByteToInt(headerSizeBuffer)
-            val packetHeader = ByteArray(headerSize)
-
-            input.read(packetHeader, 0, headerSize)
+            val headerSize: Int = ByteArray(4).run {
+                input.read(this, 0, 4)
+                fourByteToInt(this)
+            }
+            val packetHeader = ByteArray(headerSize).also { buf ->
+                input.read(buf, 0, headerSize)
+            }
             val header = Dataformat.Header.parseFrom(packetHeader)
             val body = Dataformat.Person.parseFrom(input)
             Log.d(TAG, "header: ${header.toString()}")
